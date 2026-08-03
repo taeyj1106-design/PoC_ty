@@ -1,0 +1,13 @@
+# 수집 결과물
+sial_products.json
+sial_products.csv
+
+# 로컬 설정
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
