@@ -1,9 +1,15 @@
 # 수집 결과물
 sial_products.json
 sial_products.csv
+anuga_exhibitors.json
+anuga_exhibitors.csv
+anuga_exhibitors_list.json
 
 # 로컬 설정
 .claude/settings.local.json
+
+# 실행 로그
+*.log
 
 # Python
 __pycache__/
