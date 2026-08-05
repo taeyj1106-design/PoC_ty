@@ -5,6 +5,10 @@ Algolia 검색 API 는 page 기반 페이징에서 paginationLimitedTo(=2000건)
 그래서 `_createUTCTimestamp` 숫자 범위로 재귀 이분할해 각 구간을 2000건 미만으로
 줄인 뒤 구간별로 페이징한다. 이 속성은 전 레코드가 갖고 있어(9784/9784) 누락이 없다.
 
+제품 인덱스에는 홈페이지/SNS 링크가 없다. brands 인덱스의 `website` 와
+exhibitors 인덱스의 `urls.*` 를 같이 받아서 `brand.id` / `exhibitor.id` 로
+조인해 CSV 컬럼으로 붙이고, JSON 에는 원본 hit 에 `_links` 키로 덧붙인다.
+
 사용법:  python sial_fetch_products.py
 """
 
@@ -48,7 +52,7 @@ def make_session():
     return s
 
 
-def bootstrap(session):
+def bootstrap(session, kinds=("products", "brands", "exhibitors")):
     """connect2 앱과 동일하게 GraphQL 로 Algolia 자격증명/인덱스명을 받아온다."""
     r = session.post(
         GRAPHQL_URL,
@@ -66,9 +70,10 @@ def bootstrap(session):
     app_id, api_key = cfg["applicationId"], cfg["apiKey"]
     session.headers.update({"x-algolia-api-key": api_key,
                             "x-algolia-application-id": app_id})
-    index = cfg["search"]["sorts"]["products"]["default"]["value"].replace("$LOCALE$", LOCALE)
+    sorts = cfg["search"]["sorts"]
+    indexes = {k: sorts[k]["default"]["value"].replace("$LOCALE$", LOCALE) for k in kinds}
     url = f"https://{app_id.lower()}-dsn.algolia.net/1/indexes/*/queries"
-    return url, index
+    return url, indexes
 
 
 def query(session, url, index, filters=None, page=0, hits_per_page=0):
@@ -125,6 +130,57 @@ def fetch_range(session, url, index, lo, hi):
         time.sleep(DELAY)
 
 
+def collect(session, url, index, label):
+    """한 인덱스를 이분할 + 페이징으로 전량 수집한다 (objectID 기준 중복 제거)."""
+    total = query(session, url, index)["nbHits"]
+    print(f"\n[{label}] {index} — 전체 {total}건, 분할 계산 중...")
+    ranges = split_ranges(session, url, index, 1700000000, 2100000000, total)
+    print(f"[{label}] 구간 {len(ranges)}개")
+
+    seen, hits = set(), []
+    for i, (rlo, rhi, _) in enumerate(ranges, 1):
+        got, nb = fetch_range(session, url, index, rlo, rhi)
+        new = [h for h in got if h.get("objectID") not in seen]
+        seen.update(h.get("objectID") for h in new)
+        hits.extend(new)
+        if nb:
+            print(f"[{label} {i}/{len(ranges)}] [{rlo}, {rhi}) 예상 {nb} / 신규 {len(new)} / 누적 {len(hits)}")
+        time.sleep(DELAY)
+
+    print(f"[{label}] 수집 완료: {len(hits)} / 전체 {total}")
+    if len(hits) != total:
+        print(f"  ! 차이 {total - len(hits)}건 (중복 objectID 또는 수집 중 인덱스 변경)")
+    return hits
+
+
+# exhibitors 인덱스 urls.* 중 CSV 로 내보낼 것. (marketPlace 는 전건 null 이라 제외)
+SNS_KEYS = ["website", "linkedin", "instagram", "facebook", "youtube",
+            "tiktok", "twitter", "pinterest"]
+
+
+def link_maps(brands, exhibitors):
+    """objectID -> 링크 조회용 dict 두 개를 만든다."""
+    brand_site = {b["objectID"]: (b.get("website") or "") for b in brands}
+    exh_urls = {}
+    for e in exhibitors:
+        u = e.get("urls") or {}
+        exh_urls[e["objectID"]] = {k: (u.get(k) or "") for k in SNS_KEYS}
+    return brand_site, exh_urls
+
+
+def attach_links(hits, brand_site, exh_urls):
+    """원본 hit 은 그대로 두고 조인해 온 링크만 `_links` 로 덧붙인다."""
+    for h in hits:
+        brand = h.get("brand") or {}
+        exhibitor = h.get("exhibitor") or {}
+        h["_links"] = {
+            "brand_website": brand_site.get(brand.get("id"), "") if isinstance(brand, dict) else "",
+            "exhibitor": (exh_urls.get(exhibitor.get("id")) or {k: "" for k in SNS_KEYS})
+                         if isinstance(exhibitor, dict) else {k: "" for k in SNS_KEYS},
+        }
+    return hits
+
+
 HTML_TAG = re.compile(r"<[^>]+>")
 WS = re.compile(r"\s+")
 
@@ -147,7 +203,7 @@ def joined(items, key=None):
     return " | ".join(str(i) for i in items if i)
 
 
-def flatten(h):
+def flatten(h, brand_site=None, exh_urls=None):
     """CSV 한 행으로 쓸 주요 필드만 평탄화한다."""
     exhibitor = h.get("exhibitor") or {}
     brand = h.get("brand") or {}
@@ -165,7 +221,11 @@ def flatten(h):
     ]
     slug_value = slug.get("value", "") if isinstance(slug, dict) else ""
 
-    return {
+    # 링크는 별도 인덱스에서 id 로 조인해 온다 (제품 인덱스에는 없음)
+    brand_website = (brand_site or {}).get(brand.get("id"), "") if isinstance(brand, dict) else ""
+    ex_links = (exh_urls or {}).get(exhibitor.get("id"), {}) if isinstance(exhibitor, dict) else {}
+
+    row = {
         "objectID": h.get("objectID", ""),
         "name": h.get("name", ""),
         "brand": brand.get("name", "") if isinstance(brand, dict) else "",
@@ -194,37 +254,32 @@ def flatten(h):
         "createdAt": h.get("createdAt") or "",
         "updatedAt": h.get("updatedAt") or "",
     }
+    row["brand_website"] = brand_website
+    for k in SNS_KEYS:
+        row[f"exhibitor_{k}"] = ex_links.get(k, "")
+    # 브랜드 홈페이지가 없는 제품이 많아 출품사 홈페이지 → 제품 상세 URL 순으로 대체
+    row["homepage"] = brand_website or ex_links.get("website", "") or row["product_url"]
+    return row
 
 
 def main():
     session = make_session()
-    url, index = bootstrap(session)
-    print(f"인덱스: {index}")
+    url, indexes = bootstrap(session)
 
-    total = query(session, url, index)["nbHits"]
-    print(f"전체 제품 수: {total}\n분할 계산 중...")
-
-    ranges = split_ranges(session, url, index, 1700000000, 2100000000, total)
-    print(f"\n구간 {len(ranges)}개로 분할 완료\n")
-
-    seen, hits = set(), []
-    for i, (rlo, rhi, expected) in enumerate(ranges, 1):
-        got, nb = fetch_range(session, url, index, rlo, rhi)
-        new = [h for h in got if h.get("objectID") not in seen]
-        seen.update(h.get("objectID") for h in new)
-        hits.extend(new)
-        print(f"[{i}/{len(ranges)}] [{rlo}, {rhi}) 예상 {nb} / 수신 {len(got)} / 신규 {len(new)} / 누적 {len(hits)}")
-        time.sleep(DELAY)
-
-    print(f"\n수집 완료: {len(hits)} / 전체 {total}")
-    if len(hits) != total:
-        print(f"  ! 차이 {total - len(hits)}건 (중복 objectID 또는 수집 중 인덱스 변경)")
+    hits = collect(session, url, indexes["products"], "products")
+    brands = collect(session, url, indexes["brands"], "brands")
+    exhibitors = collect(session, url, indexes["exhibitors"], "exhibitors")
+    brand_site, exh_urls = link_maps(brands, exhibitors)
+    attach_links(hits, brand_site, exh_urls)
 
     with open("sial_products.json", "w", encoding="utf-8") as f:
         json.dump(hits, f, ensure_ascii=False, indent=2)
-    print("저장: sial_products.json")
+    print("\n저장: sial_products.json")
 
-    rows = [flatten(h) for h in hits]
+    rows = [flatten(h, brand_site, exh_urls) for h in hits]
+    for col in ["brand_website", "homepage"] + [f"exhibitor_{k}" for k in SNS_KEYS]:
+        n = sum(1 for r in rows if r[col])
+        print(f"  {col:<22} {n:>6} / {len(rows)} ({n / len(rows):.1%})")
     with open("sial_products.csv", "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
