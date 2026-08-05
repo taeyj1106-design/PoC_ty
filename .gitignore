@@ -4,6 +4,12 @@ sial_products.csv
 anuga_exhibitors.json
 anuga_exhibitors.csv
 anuga_exhibitors_list.json
+foodex_products.json
+foodex_products.csv
+foodex_snapshots.json
+ism_exhibitors.json
+ism_exhibitors.csv
+ism_exhibitors_list.json
 
 # 로컬 설정
 .claude/settings.local.json
