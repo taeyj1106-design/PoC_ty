@@ -1,15 +1,7 @@
-# 수집 결과물
+# 수집 결과물은 커밋한다 (다른 PC 에서 이어받기 위함).
+# 단 sial_products.json 은 70MB 라 GitHub 권장 한도(50MB)를 넘어 제외한다.
+# 필요하면 sial_fetch_products.py 를 다시 돌려 15 분이면 재생성된다.
 sial_products.json
-sial_products.csv
-anuga_exhibitors.json
-anuga_exhibitors.csv
-anuga_exhibitors_list.json
-foodex_products.json
-foodex_products.csv
-foodex_snapshots.json
-ism_exhibitors.json
-ism_exhibitors.csv
-ism_exhibitors_list.json
 
 # 로컬 설정
 .claude/settings.local.json
