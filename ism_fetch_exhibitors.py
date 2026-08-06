@@ -150,14 +150,18 @@ def write_outputs(rows):
     with open(OUT_JSON, 'w', encoding='utf-8') as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
     print(f'저장: {OUT_JSON}')
+    # 상세 페이지가 없는 항목은 CSV 에서 뺀다 (전 컬럼이 빈 행이 되므로).
+    # JSON 에는 남겨야 --resume 이 미수집분을 다시 시도할 수 있다.
+    got = [r for r in rows if r.get('_fetched')]
     with open(OUT_CSV, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction='ignore')
         w.writeheader()
-        for r in rows:
+        for r in got:
             row = {c: r.get(c, '') for c in COLUMNS}
             row['country'] = row['country'] or r.get('country_detail', '')
             w.writerow(row)
-    print(f'저장: {OUT_CSV} ({len(rows)}행 x {len(COLUMNS)}열)')
+    print(f'저장: {OUT_CSV} ({len(got)}행 x {len(COLUMNS)}열, '
+          f'상세 없는 {len(rows) - len(got)}건 제외)')
 
 
 def main():
