@@ -73,7 +73,12 @@ def fetch_list(session):
 
 
 def fetch_one(session, path, idx):
-    """상세 1건. 원본이 간헐적으로 홈페이지를 돌려주므로 캐시버스터를 매번 바꿔 재시도."""
+    """상세 1건. 원본이 간헐적으로 출품사 목록 페이지를 돌려주므로 캐시버스터를 바꿔 재시도.
+
+    재시도 간격을 넉넉히 둔다. 0.4s 로 몰아치면 그 자체가 초당 1건을 넘겨
+    폴백을 다시 유발하고, 한번 빠지면 계속 실패하는 악순환이 된다
+    (실측: 이 상태로 513건을 돌리면 성공률 0%).
+    """
     for attempt in range(4):
         url = f'{SITE}{path}?v={idx}-{attempt}-{random.randint(1000, 999999)}'
         try:
@@ -84,7 +89,8 @@ def fetch_one(session, path, idx):
                 return {}
         except requests.RequestException:
             pass
-        time.sleep(0.4)
+        if attempt < 3:
+            time.sleep(2.0 * (attempt + 1))     # 2s, 4s, 6s
     return {}
 
 
@@ -122,8 +128,11 @@ def fetch_details(rows, delay=DELAY, batch=0):
         r['_fetched'] = bool(d)
         done += 1
         ok += 1 if d else 0
-        if done % 25 == 0 or done == len(todo):
+        # 죽은 경로는 재시도로 건당 20초가 걸린다. 진행이 멈춘 건지 느린 건지
+        # 구분되도록 로그는 10건마다 찍고, 저장만 25건마다 한다.
+        if done % 10 == 0 or done == len(todo):
             print(f'  {done}/{len(todo)}  성공 {ok}', flush=True)
+        if done % 25 == 0 or done == len(todo):
             tmp = OUT_JSON + '.tmp'
             json.dump(rows, open(tmp, 'w', encoding='utf-8'), ensure_ascii=False)
             os.replace(tmp, OUT_JSON)

@@ -7,7 +7,7 @@ SIAL / Anuga / ISM / FOODEX 출품 카탈로그를 브라우저 없이 `requests
 | --- | --- | --- | --- |
 | SIAL Paris 2026 | [`sial_fetch_products.py`](sial_fetch_products.py) | 제품 10,248 | Algolia 검색 API |
 | Anuga 2025 | [`anuga_fetch_exhibitors.py`](anuga_fetch_exhibitors.py) | 출품사 8,265 | HTML 파싱 (Koelnmesse ASDB) |
-| ISM Cologne | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) | 출품사 | HTML 파싱 (사이트맵 경유) |
+| ISM Cologne | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) | 출품사 1,614 | HTML 파싱 (사이트맵 경유) |
 | FOODEX JAPAN 2025 | [`foodex_fetch_products.py`](foodex_fetch_products.py) | 제품 881 | Web Archive 스냅샷 |
 
 **개별 제품 레코드가 있는 건 SIAL 과 FOODEX 뿐이다.** Anuga·ISM 은 같은 ASDB
@@ -98,6 +98,7 @@ URL 이 있는 3,151건 기준:
 | `sial_ecommerce_domains.json` | 0.3MB | 도메인 판정 캐시 |
 | `sial_product_pages.json` | 0.9MB | 제품 URL 판정 캐시 |
 | `anuga_exhibitors.csv` | 8,265행 × 16열 | |
+| `ism_exhibitors.csv` | 1,684행 × 15열 | 1,614행만 내용 있음 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
 
 수집 결과물은 저장소에 커밋한다 (다른 PC 에서 이어받기 위함). 단
@@ -143,6 +144,11 @@ python sial_check_product_pages.py     # 28분 (캐시 있으면 즉시)
 - FOODEX 는 전수가 아니라 **표본**이다. 아카이브에 남은 881건으로 전체 13,000
   여 건 중 약 7% — 점유율 분석에 쓰면 편향된다.
 - Anuga 데이터는 2025년(종료) 회차다. 다음 회차는 2027-10-09~13.
+- ISM 은 사이트맵 1,684건 중 **1,614건(95.8%) 수집, 70건은 상세 페이지가 없다.**
+  원본이 404 대신 출품사 목록 페이지를 200 으로 돌려주는 탓에 죽은 경로와
+  일시적 폴백이 구분되지 않는다. CSV 에 그 70행이 빈 행으로 남아 있다.
+  재시도 간격을 짧게 잡으면(0.4초 4연타) 그 자체가 초당 1건을 넘겨 폴백을
+  유발하고 성공률이 0% 로 떨어진다 — 백오프를 2·4·6초로 두는 이유다.
 
 **죽은 패싯** — 캡처된 요청의 `made_in` 과 `specs.made_in_france.value` 는 이
 인덱스의 `attributesForFaceting` 에 없어서 응답에 나타나지 않는다 (Algolia 가
