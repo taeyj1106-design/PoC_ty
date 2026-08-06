@@ -97,7 +97,7 @@ URL 이 있는 3,151건 기준:
 | `sial_products.json` | 84MB | 원본 hit + `_links` / `_ecommerce` / `_product_page` |
 | `sial_ecommerce_domains.json` | 0.3MB | 도메인 판정 캐시 |
 | `sial_product_pages.json` | 0.9MB | 제품 URL 판정 캐시 |
-| `anuga_exhibitors.csv` | 8,265행 × 16열 | 상세 8,264건 (미수집 1) |
+| `anuga_exhibitors.csv` | 8,264행 × 16열 | 상세 못 받은 1건은 제외 |
 | `ism_exhibitors.csv` | 1,614행 × 15열 | 상세 없는 70건은 제외 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
 

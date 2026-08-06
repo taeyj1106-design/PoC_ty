@@ -226,6 +226,10 @@ def parse_detail(t):
     return d
 
 
+# 목록 파싱이 회사명을 놓치는 경우가 있어(실측 10건) 상세에서도 뽑는다.
+NAME_RE = re.compile(r'<div class="headline-title">.*?<strong><span>(.*?)</span>', re.S)
+
+
 def fetch_one(s, path, idx, delay):
     """상세 1건. CloudFront 가 /exhibitor/... 에 홈페이지를 캐싱해두는 경우가 있어
     캐시 우회용 쿼리스트링을 붙인다 (없으면 133KB 짜리 홈페이지가 돌아온다)."""
@@ -236,7 +240,11 @@ def fetch_one(s, path, idx, delay):
         try:
             resp = s.get(url, timeout=60)
             if resp.status_code == 200 and 'location-info' in resp.text:
-                return parse_detail(resp.text)
+                d = parse_detail(resp.text)
+                m = NAME_RE.search(resp.text)
+                if m:
+                    d['detail_name'] = text_of(m.group(1))
+                return d
         except requests.RequestException:
             pass
         # 실패는 서버가 간헐적으로 홈페이지를 돌려주는 현상이라 요청률과 무관하다.
@@ -265,6 +273,8 @@ def fetch_details(rows, delay=1.0, workers=3, batch=0):
             local.s.headers.update({'User-Agent': UA})
         d = fetch_one(local.s, r['path'], i, delay)
         r.update(d)
+        if not r.get('name'):                       # 목록에서 못 얻은 경우만 보완
+            r['name'] = d.get('detail_name', '')
         r['detail_url'] = SITE + r['path']
         r['_fetched'] = bool(d)
         with lock:
@@ -297,12 +307,16 @@ def write_outputs(rows):
     with open(OUT_JSON, 'w', encoding='utf-8') as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)
     print(f'저장: {OUT_JSON}')
+    # 상세를 못 받은 항목은 CSV 에서 뺀다 (전 컬럼이 빈 행이 되므로).
+    # JSON 에는 남겨야 --resume 이 다시 시도할 수 있다.
+    got = [r for r in rows if r.get('_fetched')]
     with open(OUT_CSV, 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction='ignore')
         w.writeheader()
-        for r in rows:
+        for r in got:
             w.writerow({c: r.get(c, '') for c in COLUMNS})
-    print(f'저장: {OUT_CSV} ({len(rows)}행 x {len(COLUMNS)}열)')
+    print(f'저장: {OUT_CSV} ({len(got)}행 x {len(COLUMNS)}열, '
+          f'상세 없는 {len(rows) - len(got)}건 제외)')
 
 
 def main():
