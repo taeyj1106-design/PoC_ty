@@ -97,7 +97,7 @@ URL 이 있는 3,151건 기준:
 | `sial_products.json` | 84MB | 원본 hit + `_links` / `_ecommerce` / `_product_page` |
 | `sial_ecommerce_domains.json` | 0.3MB | 도메인 판정 캐시 |
 | `sial_product_pages.json` | 0.9MB | 제품 URL 판정 캐시 |
-| `anuga_exhibitors.csv` | 8,265행 × 16열 | |
+| `anuga_exhibitors.csv` | 8,265행 × 16열 | 상세 8,264건 (미수집 1) |
 | `ism_exhibitors.csv` | 1,614행 × 15열 | 상세 없는 70건은 제외 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
 
@@ -115,6 +115,18 @@ python sial_check_product_pages.py     # 28분 (캐시 있으면 즉시)
 ```
 
 `LOCALE = "en"` 을 `"fr"` 로 바꾸면 프랑스어 인덱스를 쓴다.
+
+Anuga·ISM 상세 수집은 **단일 워커로 돌려야 한다.** `anuga_fetch_exhibitors.py` 의
+기본값 `--workers 3` 은 초당 3건이라 원본이 상세 대신 홈페이지/목록을 돌려준다.
+
+```bash
+python anuga_fetch_exhibitors.py --resume --workers 1 --delay 1.2 --batch 2000
+python ism_fetch_exhibitors.py --resume --delay 1.3
+```
+
+이 설정으로 Anuga 8,137건을 배치로 나눠 받았고 성공률은 98~99% 였다
+(배치당 2,000건 · 약 80분). `--resume` 은 미수집분만 다시 시도하므로
+중간에 끊어도 안전하다.
 
 ## 주의사항
 
