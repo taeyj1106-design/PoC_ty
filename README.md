@@ -10,6 +10,7 @@ SIAL / Anuga / ISM / FOODEX 출품 카탈로그를 브라우저 없이 `requests
 | ISM Cologne | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) | 출품사 1,614 | HTML 파싱 (사이트맵 경유) |
 | FOODEX JAPAN 2025 | [`foodex_fetch_products.py`](foodex_fetch_products.py) | 제품 881 | Web Archive 스냅샷 |
 | FOODEX JAPAN 2025 | [`foodex_fetch_companies.py`](foodex_fetch_companies.py) | 출품사 1,570 | Web Archive 스냅샷 |
+| FOODEX JAPAN 2025 | [`foodex_product_index.py`](foodex_product_index.py) | 제품 3,302 (통합) | 위 둘을 제품번호로 병합 |
 
 **개별 제품 레코드가 있는 건 SIAL 과 FOODEX 뿐이다.** Anuga·ISM 은 같은 ASDB
 시스템이라 제품군(분류 트리)·브랜드 수준까지만 있다.
@@ -102,6 +103,7 @@ URL 이 있는 3,151건 기준:
 | `ism_exhibitors.csv` | 1,614행 × 15열 | 상세 없는 70건은 제외 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
 | `foodex_companies.csv` | 1,570행 × 14열 | 출품사 + 링크된 제품 목록 |
+| `foodex_product_index.csv` | 3,302행 × 16열 | 제품 통합 목록 (상세 881 + 이름만 2,421) |
 
 수집 결과물은 저장소에 커밋한다 (다른 PC 에서 이어받기 위함). 단
 `sial_products.json` 만 GitHub 권장 한도(50MB)를 넘어 제외한다 — 재생성 15분.
