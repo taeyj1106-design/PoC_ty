@@ -9,6 +9,7 @@ SIAL / Anuga / ISM / FOODEX 출품 카탈로그를 브라우저 없이 `requests
 | Anuga 2025 | [`anuga_fetch_exhibitors.py`](anuga_fetch_exhibitors.py) | 출품사 8,265 | HTML 파싱 (Koelnmesse ASDB) |
 | ISM Cologne | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) | 출품사 1,614 | HTML 파싱 (사이트맵 경유) |
 | FOODEX JAPAN 2025 | [`foodex_fetch_products.py`](foodex_fetch_products.py) | 제품 881 | Web Archive 스냅샷 |
+| FOODEX JAPAN 2025 | [`foodex_fetch_companies.py`](foodex_fetch_companies.py) | 출품사 1,570 | Web Archive 스냅샷 |
 
 **개별 제품 레코드가 있는 건 SIAL 과 FOODEX 뿐이다.** Anuga·ISM 은 같은 ASDB
 시스템이라 제품군(분류 트리)·브랜드 수준까지만 있다.
@@ -100,6 +101,7 @@ URL 이 있는 3,151건 기준:
 | `anuga_exhibitors.csv` | 8,264행 × 16열 | 상세 못 받은 1건은 제외 |
 | `ism_exhibitors.csv` | 1,614행 × 15열 | 상세 없는 70건은 제외 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
+| `foodex_companies.csv` | 1,570행 × 14열 | 출품사 + 링크된 제품 목록 |
 
 수집 결과물은 저장소에 커밋한다 (다른 PC 에서 이어받기 위함). 단
 `sial_products.json` 만 GitHub 권장 한도(50MB)를 넘어 제외한다 — 재생성 15분.
@@ -153,7 +155,14 @@ python ism_fetch_exhibitors.py --resume --delay 1.3
 - **마켓플레이스(Amazon·쿠팡 등) 판매는 잡지 못한다.** 자사몰이 없어도 거기서
   팔릴 수 있는데 제품당 검색이 필요하고 동명 오탐이 크다. 현재 데이터에 있는
   마켓플레이스 직링크는 11건(전부 Alibaba)뿐이다.
-- FOODEX 는 전수가 아니라 **표본**이다. 아카이브에 남은 881건으로 전체 13,000
+- FOODEX 는 **제품과 출품사의 보존율이 다르다.** 출품사(`company.php`)는 아카이브
+  스냅샷 1,599건 중 1,570건(98.2%)을 받아 사실상 온전하지만, 제품은 표본이다.
+  출품사 페이지에 링크된 제품 번호는 3,194개인데 제품 상세가 남은 건 881건뿐이라,
+  **제품 이름·번호는 출품사 쪽에서 3.6배 더 얻을 수 있다** (상세 내용은 없음).
+- 아카이브가 `statuscode:200` 으로 기록한 스냅샷 중에도 실제 내용은 원본의
+  소프트 404 페이지인 것이 섞여 있다. 4KB 짜리 "404 Page Not Found" 본문이라
+  파서가 아니라 수집기가 걸러야 한다.
+- FOODEX 제품은 전수가 아니라 **표본**이다. 아카이브에 남은 881건으로 전체 13,000
   여 건 중 약 7% — 점유율 분석에 쓰면 편향된다.
 - Anuga 데이터는 2025년(종료) 회차다. 다음 회차는 2027-10-09~13.
 - ISM 은 사이트맵 1,684건 중 **1,614건(95.8%) 수집, 70건은 상세 페이지가 없다.**
