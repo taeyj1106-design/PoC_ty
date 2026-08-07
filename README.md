@@ -3,14 +3,12 @@
 SIAL / Anuga / ISM / FOODEX 출품 카탈로그를 브라우저 없이 `requests` 로 수집하는 PoC.
 전시회마다 백엔드가 달라서 접근 방식도 다르다.
 
-| 전시회 | 스크립트 | 수집 단위 | 방식 |
+| 전시회 | 수집 단위 | 방식 | 스크립트 |
 | --- | --- | --- | --- |
-| SIAL Paris 2026 | [`sial_fetch_products.py`](sial_fetch_products.py) | 제품 10,248 | Algolia 검색 API |
-| Anuga 2025 | [`anuga_fetch_exhibitors.py`](anuga_fetch_exhibitors.py) | 출품사 8,265 | HTML 파싱 (Koelnmesse ASDB) |
-| ISM Cologne | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) | 출품사 1,614 | HTML 파싱 (사이트맵 경유) |
-| FOODEX JAPAN 2025 | [`foodex_fetch_products.py`](foodex_fetch_products.py) | 제품 881 | Web Archive 스냅샷 |
-| FOODEX JAPAN 2025 | [`foodex_fetch_companies.py`](foodex_fetch_companies.py) | 출품사 1,570 | Web Archive 스냅샷 |
-| FOODEX JAPAN 2025 | [`foodex_product_index.py`](foodex_product_index.py) | 제품 3,302 (통합) | 위 둘을 제품번호로 병합 |
+| SIAL Paris 2026 | 제품 10,248 | Algolia 검색 API | [`sial_fetch_products.py`](sial_fetch_products.py) 외 2 |
+| Anuga 2025 | 출품사 8,264 | HTML 파싱 (Koelnmesse ASDB) | [`anuga_fetch_exhibitors.py`](anuga_fetch_exhibitors.py) |
+| ISM Cologne | 출품사 1,614 | HTML 파싱 (사이트맵 경유) | [`ism_fetch_exhibitors.py`](ism_fetch_exhibitors.py) |
+| FOODEX JAPAN 2025 | 출품사 1,570 · 제품 3,302 | Web Archive 스냅샷 | [`foodex_fetch_companies.py`](foodex_fetch_companies.py) 외 2 |
 
 **개별 제품 레코드가 있는 건 SIAL 과 FOODEX 뿐이다.** Anuga·ISM 은 같은 ASDB
 시스템이라 제품군(분류 트리)·브랜드 수준까지만 있다.
@@ -91,6 +89,22 @@ URL 이 있는 3,151건 기준:
 | price_only (가격만) | 160 | 5.1% |
 | no | 1,824 | 57.9% |
 
+## FOODEX 파이프라인
+
+원본 가이드북은 전시 종료 후 HTTP 인증(401)으로 잠겨 있어 Web Archive 를 쓴다.
+제품과 출품사의 보존율이 크게 달라서, 둘을 따로 받아 제품번호로 합친다.
+
+```
+foodex_fetch_products.py      product.php 스냅샷 881건 (전체의 약 7%)
+  → foodex_products.json/csv
+
+foodex_fetch_companies.py     company.php 스냅샷 1,570/1,599건 (98.2%)
+  → foodex_companies.json/csv    회사 정보 + 링크된 제품 번호·이름
+
+foodex_product_index.py       위 둘을 제품번호로 병합
+  → foodex_product_index.csv     3,302건 (상세 881 + 이름만 2,421)
+```
+
 ## 산출물
 
 | 파일 | 크기 | 내용 |
@@ -132,6 +146,15 @@ python ism_fetch_exhibitors.py --resume --delay 1.3
 (배치당 2,000건 · 약 80분). `--resume` 은 미수집분만 다시 시도하므로
 중간에 끊어도 안전하다.
 
+FOODEX 는 순서대로 돌린다. 아카이브가 장시간 요청에 응답을 끊는 구간이 있어
+`--resume` 을 여러 번 돌려야 할 수 있다 (실측: 1,166 → 1,329 → 1,570).
+
+```bash
+python foodex_fetch_products.py                # 약 25분
+python foodex_fetch_companies.py --resume      # 약 60분, 필요하면 반복
+python foodex_product_index.py                 # 즉시 (병합만)
+```
+
 ## 주의사항
 
 **수집 예의**
@@ -161,6 +184,8 @@ python ism_fetch_exhibitors.py --resume --delay 1.3
   스냅샷 1,599건 중 1,570건(98.2%)을 받아 사실상 온전하지만, 제품은 표본이다.
   출품사 페이지에 링크된 제품 번호는 3,194개인데 제품 상세가 남은 건 881건뿐이라,
   **제품 이름·번호는 출품사 쪽에서 3.6배 더 얻을 수 있다** (상세 내용은 없음).
+  `foodex_product_index.csv` 의 `has_detail` 로 구분한다 — `yes` 881건은 스펙까지,
+  `no` 2,421건은 제품명·회사·부스까지만 있다. 스펙 기준 집계에 섞어 쓰면 안 된다.
 - 아카이브가 `statuscode:200` 으로 기록한 스냅샷 중에도 실제 내용은 원본의
   소프트 404 페이지인 것이 섞여 있다. 4KB 짜리 "404 Page Not Found" 본문이라
   파서가 아니라 수집기가 걸러야 한다.
