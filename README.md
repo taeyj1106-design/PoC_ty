@@ -15,7 +15,7 @@ SIAL / Anuga / ISM / FOODEX 출품 카탈로그를 브라우저 없이 `requests
 
 ## SIAL 파이프라인
 
-세 단계로 나뉜다. 앞 단계 산출물을 뒤 단계가 읽는다.
+네 단계로 나뉜다. 앞 단계 산출물을 뒤 단계가 읽는다.
 
 ```
 sial_fetch_products.py        Algolia 에서 제품/브랜드/출품사 3개 인덱스 전량 수집
@@ -26,6 +26,9 @@ sial_check_ecommerce.py       고유 도메인 1,397개의 홈페이지를 1회�
 
 sial_check_product_pages.py   제품 상세 URL 2,505개를 직접 받아
   → sial_product_pages.json      그 페이지가 실제 구매 가능한지 판정
+
+sial_check_marketplace.py     같은 URL 3,778개의 외부 링크에서
+  → sial_marketplace_pages.json  Amazon·쿠팡 등 마켓플레이스 링크를 찾음
 ```
 
 ### 1) API key 는 하드코딩되어 있지 않다
@@ -89,6 +92,22 @@ URL 이 있는 3,151건 기준:
 | price_only (가격만) | 160 | 5.1% |
 | no | 1,824 | 57.9% |
 
+**3단계 (마켓플레이스)** — 브랜드/출품사/제품 페이지의 **외부 링크 호스트**를
+마켓플레이스 23곳과 대조한다. 본문 문구가 아니라 `href` 만 보므로 오탐이 거의 없다.
+제품명으로 Amazon·쿠팡을 검색하는 방식은 쓰지 않았다 (봇 차단 우회 + 10,248회 질의
++ 동명 오탐).
+
+| 마켓플레이스 | 제품 | | 마켓플레이스 | 제품 |
+| --- | --- | --- | --- | --- |
+| Amazon | 134 | | Walmart | 9 |
+| Alibaba | 55 | | 라쿠텐 | 8 |
+| Shopee | 29 | | 쿠팡 | 5 |
+| Lazada | 25 | | 티몰/타오바오 | 2 |
+| 네이버 스마트스토어 | 20 | | Carrefour | 1 |
+
+총 249건(2.4%)이고, 그중 **158건은 자사몰 판정이 `no`/`unknown` 이었다** —
+1·2단계만으로는 온라인 판매를 놓쳤을 제품이다.
+
 ## FOODEX 파이프라인
 
 원본 가이드북은 전시 종료 후 HTTP 인증(401)으로 잠겨 있어 Web Archive 를 쓴다.
@@ -109,10 +128,11 @@ foodex_product_index.py       위 둘을 제품번호로 병합
 
 | 파일 | 크기 | 내용 |
 | --- | --- | --- |
-| `sial_products.csv` | 10,248행 × 47열 | 기본 26 + 링크 10 + 이커머스 6 + 제품페이지 5 |
-| `sial_products.json` | 84MB | 원본 hit + `_links` / `_ecommerce` / `_product_page` |
+| `sial_products.csv` | 10,248행 × 51열 | 기본 26 + 링크 10 + 이커머스 6 + 제품페이지 5 + 마켓플레이스 4 |
+| `sial_products.json` | 89MB | 원본 hit + `_links` / `_ecommerce` / `_product_page` / `_marketplace` |
 | `sial_ecommerce_domains.json` | 0.3MB | 도메인 판정 캐시 |
 | `sial_product_pages.json` | 0.9MB | 제품 URL 판정 캐시 |
+| `sial_marketplace_pages.json` | 2.5MB | 마켓플레이스 링크 판정 캐시 |
 | `anuga_exhibitors.csv` | 8,264행 × 16열 | 상세 못 받은 1건은 제외 |
 | `ism_exhibitors.csv` | 1,614행 × 15열 | 상세 없는 70건은 제외 (아래 참고) |
 | `foodex_products.csv` | 881행 × 16열 | |
@@ -121,7 +141,7 @@ foodex_product_index.py       위 둘을 제품번호로 병합
 
 수집 결과물은 저장소에 커밋한다 (다른 PC 에서 이어받기 위함). 단
 `sial_products.json` 만 GitHub 권장 한도(50MB)를 넘어 제외한다 — 재생성 15분.
-판정 캐시 2개는 커밋되어 있어 이커머스 스캔 53분은 재실행할 필요가 없다.
+판정 캐시 3개는 커밋되어 있어 이커머스·마켓플레이스 스캔 70분은 재실행할 필요가 없다.
 
 ## 실행
 
@@ -130,6 +150,7 @@ pip install requests pandas truststore
 python sial_fetch_products.py          # 15분
 python sial_check_ecommerce.py         # 25분 (캐시 있으면 즉시)
 python sial_check_product_pages.py     # 28분 (캐시 있으면 즉시)
+python sial_check_marketplace.py       # 15분, 일시적 실패가 남으면 반복 실행
 ```
 
 `LOCALE = "en"` 을 `"fr"` 로 바꾸면 프랑스어 인덱스를 쓴다.
@@ -177,9 +198,12 @@ python foodex_product_index.py                 # 즉시 (병합만)
 - 제품 URL 이 있는 건 34.5% 뿐이라, 나머지는 도메인 판정으로 갈음해야 한다.
   브랜드 홈페이지가 없으면 출품사 홈페이지로 대체되므로 유통사가 출품한
   제품은 특히 어긋난다.
-- **마켓플레이스(Amazon·쿠팡 등) 판매는 잡지 못한다.** 자사몰이 없어도 거기서
-  팔릴 수 있는데 제품당 검색이 필요하고 동명 오탐이 크다. 현재 데이터에 있는
-  마켓플레이스 직링크는 11건(전부 Alibaba)뿐이다.
+- **마켓플레이스 판정은 하한선이다.** 브랜드가 자기 사이트에 걸어둔 링크만 보므로,
+  링크가 없다고 그 마켓플레이스에서 안 판다는 뜻이 아니다 (유통사가 올린 상품은
+  브랜드도 모른다). 반대로 링크가 있으면 판매는 사실상 확실하다.
+  즉 **오탐은 적고 누락은 많다.**
+- 마켓플레이스 스캔은 페이지 본문을 2MB 까지 읽는다. 500KB 로 자르면 푸터에 있는
+  링크를 통째로 놓쳐서 발견 건수가 31 건으로 떨어졌다 (실측, 정상값 249건).
 - FOODEX 는 **제품과 출품사의 보존율이 다르다.** 출품사(`company.php`)는 아카이브
   스냅샷 1,599건 중 1,570건(98.2%)을 받아 사실상 온전하지만, 제품은 표본이다.
   출품사 페이지에 링크된 제품 번호는 3,194개인데 제품 상세가 남은 건 881건뿐이라,
